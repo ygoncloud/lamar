@@ -3,17 +3,62 @@ document.addEventListener('DOMContentLoaded', () => {
     const jobList = document.getElementById('job-list');
     const jobModal = new bootstrap.Modal(document.getElementById('jobModal'));
     const jobModalLabel = document.getElementById('jobModalLabel');
+    const searchInput = document.getElementById('search-input');
 
     let jobs = JSON.parse(localStorage.getItem('jobs')) || [];
+    let currentSortColumn = null;
+    let currentSortDirection = 'asc';
 
-    const renderJobs = () => {
+    const sortJobs = (column) => {
+        if (currentSortColumn === column) {
+            currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSortColumn = column;
+            currentSortDirection = 'asc';
+        }
+
+        jobs.sort((a, b) => {
+            const valA = a[column];
+            const valB = b[column];
+
+            if (valA < valB) {
+                return currentSortDirection === 'asc' ? -1 : 1;
+            }
+            if (valA > valB) {
+                return currentSortDirection === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+
+        updateSortIcons();
+        filterJobs();
+    };
+
+    const updateSortIcons = () => {
+        document.querySelectorAll('.sortable').forEach(header => {
+            const icon = header.querySelector('i');
+            if (header.dataset.sort === currentSortColumn) {
+                icon.className = `fas fa-sort-${currentSortDirection === 'asc' ? 'up' : 'down'}`;
+            } else {
+                icon.className = 'fas fa-sort';
+            }
+        });
+    };
+
+    document.querySelectorAll('.sortable').forEach(header => {
+        header.addEventListener('click', () => {
+            sortJobs(header.dataset.sort);
+        });
+    });
+
+    const renderJobs = (jobsToRender = jobs) => {
         jobList.innerHTML = '';
-        if (jobs.length === 0) {
-            jobList.innerHTML = '<tr><td colspan="5" class="text-center">No job applications added yet.</td></tr>';
+        if (jobsToRender.length === 0) {
+            jobList.innerHTML = '<tr><td colspan="7" class="text-center">No job applications found.</td></tr>';
             return;
         }
 
-        jobs.forEach(job => {
+        jobsToRender.forEach(job => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${job.company}</td>
@@ -31,17 +76,30 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    const filterJobs = () => {
+        const searchTerm = searchInput.value.toLowerCase();
+        const filteredJobs = jobs.filter(job =>
+            job.company.toLowerCase().includes(searchTerm) ||
+            job.title.toLowerCase().includes(searchTerm) ||
+            (job.location && job.location.toLowerCase().includes(searchTerm)) ||
+            job.status.toLowerCase().includes(searchTerm)
+        );
+        renderJobs(filteredJobs);
+    };
+
+    searchInput.addEventListener('keyup', filterJobs);
+
     const getStatusClass = (status) => {
         switch (status) {
             case 'Interviewing':
-                return 'bg-warning text-dark';
+                return 'status-interviewing';
             case 'Offer':
-                return 'bg-success';
+                return 'status-offer';
             case 'Rejected':
-                return 'bg-danger';
+                return 'status-rejected';
             case 'Applied':
             default:
-                return 'bg-primary';
+                return 'status-applied';
         }
     };
 
@@ -77,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         localStorage.setItem('jobs', JSON.stringify(jobs));
-        renderJobs();
+        filterJobs();
         jobModal.hide();
         jobForm.reset();
         document.getElementById('job-id').value = '';
@@ -102,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirm('Are you sure you want to delete this application?')) {
             jobs = jobs.filter(job => job.id !== id);
             localStorage.setItem('jobs', JSON.stringify(jobs));
-            renderJobs();
+            filterJobs();
         }
     };
     
@@ -114,5 +172,65 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
 
-    renderJobs();
+    filterJobs();
+
+    const themeSwitch = document.getElementById('theme-switch');
+    const body = document.body;
+
+    const applyTheme = (theme) => {
+        if (theme === 'dark') {
+            body.classList.add('dark-mode');
+            themeSwitch.checked = true;
+        } else {
+            body.classList.remove('dark-mode');
+            themeSwitch.checked = false;
+        }
+    };
+
+    themeSwitch.addEventListener('change', () => {
+        if (themeSwitch.checked) {
+            localStorage.setItem('theme', 'dark');
+            applyTheme('dark');
+        } else {
+            localStorage.setItem('theme', 'light');
+            applyTheme('light');
+        }
+    });
+
+    // Load saved theme
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    applyTheme(savedTheme);
+
+    const exportToCsv = () => {
+        const headers = ['Company', 'Job Title', 'Date Applied', 'Link', 'Location', 'Status'];
+        const csvRows = [headers.join(',')];
+
+        jobs.forEach(job => {
+            const row = [
+                job.company,
+                job.title,
+                job.date,
+                job.jobLink || '',
+                job.location || '',
+                job.status
+            ].join(',');
+            csvRows.push(row);
+        });
+
+        const csvString = csvRows.join('\n');
+        const blob = new Blob([csvString], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'job_applications.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    document.getElementById('export-csv').addEventListener('click', exportToCsv);
+
+    document.getElementById('logout-button').addEventListener('click', () => {
+        sessionStorage.removeItem('isLoggedIn');
+        window.location.href = 'login.html';
+    });
 });
