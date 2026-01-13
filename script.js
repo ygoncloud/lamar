@@ -229,6 +229,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('export-csv').addEventListener('click', exportToCsv);
 
+    // Import CSV functionality
+    const importCsvButton = document.getElementById('import-csv-button');
+    const importCsvInput = document.getElementById('import-csv-input');
+
+    importCsvButton.addEventListener('click', () => {
+        importCsvInput.click();
+    });
+
+    importCsvInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csvString = e.target.result;
+                try {
+                    const importedJobs = parseCsvToJobs(csvString);
+                    // Add new unique IDs to imported jobs
+                    const jobsWithNewIds = importedJobs.map(job => ({ ...job, id: Date.now().toString() + Math.random().toString(36).substring(2, 9) }));
+                    jobs = [...jobs, ...jobsWithNewIds]; // Append imported jobs
+                    localStorage.setItem('jobs', JSON.stringify(jobs));
+                    filterJobs();
+                    alert('Job applications imported successfully!');
+                } catch (error) {
+                    alert('Error parsing CSV file: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+            // Reset the input value to allow importing the same file again
+            event.target.value = '';
+        }
+    });
+
+    const parseCsvToJobs = (csvString) => {
+        const lines = csvString.trim().split('\n');
+        if (lines.length === 0) {
+            return [];
+        }
+
+        const headers = lines[0].split(',').map(header => header.trim().toLowerCase().replace(/\s/g, ''));
+        const jobData = [];
+
+        for (let i = 1; i < lines.length; i++) {
+            const currentLine = lines[i].split(',');
+            if (currentLine.length !== headers.length) {
+                console.warn(`Skipping malformed row: ${lines[i]}`);
+                continue; // Skip malformed rows
+            }
+            const job = {};
+            headers.forEach((header, index) => {
+                job[header] = currentLine[index].trim();
+            });
+            // Map CSV headers to expected job object properties
+            jobData.push({
+                company: job.company || '',
+                title: job.jobtitle || '',
+                date: job.dateapplied || '',
+                jobLink: job.link || '',
+                location: job.location || '',
+                status: job.status || ''
+            });
+        }
+        return jobData;
+    };
+
     document.getElementById('logout-button').addEventListener('click', () => {
         sessionStorage.removeItem('isLoggedIn');
         window.location.href = 'login.html';
